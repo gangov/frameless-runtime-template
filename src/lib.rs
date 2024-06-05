@@ -192,7 +192,9 @@ use sp_core::{hexdisplay::HexDisplay, OpaqueMetadata, H256};
 use sp_runtime::{
 	create_runtime_str, generic,
 	traits::{BlakeTwo256, Block as BlockT, Hash},
-	transaction_validity::{TransactionSource, TransactionValidity, ValidTransactionBuilder},
+	transaction_validity::{
+		TransactionSource, TransactionValidity, TransactionValidityError, ValidTransactionBuilder,
+	},
 	ApplyExtrinsicResult, ExtrinsicInclusionMode,
 };
 use sp_version::RuntimeVersion;
@@ -236,7 +238,7 @@ type Balance = u128;
 enum Call {
 	SetValue { value: u32 },
 	UpgradeCode { code: Vec<u8> },
-	Transfer { from: AccountId, to: AccountId, amount: Balance },
+	Transfer { to: AccountId, amount: Balance },
 }
 
 #[derive(TypeInfo, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
@@ -399,7 +401,13 @@ impl Runtime {
 				});
 				Ok(())
 			},
-			Call::Transfer { from, to, amount } => {
+			Call::Transfer { to, amount } => {
+				let from = ext.clone().signature.map(|tuple| tuple.0).ok_or(
+					TransactionValidityError::Invalid(
+						sp_runtime::transaction_validity::InvalidTransaction::BadSigner,
+					),
+				)?;
+
 				Self::mutate_state(
 					BALANCES_KEY,
 					|current_balance: &mut BTreeMap<AccountId, Balance>| {
@@ -829,6 +837,13 @@ mod tests {
 			let stored_code = Runtime::get_state::<Vec<u8>>(CODE_KEY).unwrap();
 			assert_eq!(stored_code, new_code);
 		});
+	}
+
+	#[test]
+	fn transferring_works() {
+		let mut initial_balance = BTreeMap::new();
+		initial_balance
+			.insert(AccountId::from_raw(*b"//Alice0000000000000000000000000"), Balance::default());
 	}
 
 	#[test]
