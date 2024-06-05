@@ -210,7 +210,11 @@ const HEADER_KEY: &[u8] = b"header";
 /// next block.
 const EXTRINSICS_KEY: &[u8] = b"extrinsics";
 
+/// Key that will be used to store the code
 const CODE_KEY: &[u8] = b"code";
+
+/// Key that will be used to store the AccountId and Balances map
+const BALANCES_KEY: &[u8] = b"balances";
 
 /// The block number type. You should not change this.
 type BlockNumber = u32;
@@ -222,12 +226,16 @@ type Signature = sp_core::sr25519::Signature;
 /// be aware of using the right crypto type when using `sp_keyring` and similar crates.
 type AccountId = sp_core::sr25519::Public;
 
+// Type used for representing balances owned by an `AccountId`
+type Balance = u128;
+
 #[derive(
 	Debug, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize,
 )]
 enum Call {
 	SetValue { value: u32 },
 	UpgradeCode { code: Vec<u8> },
+	Transfer { from: AccountId, to: AccountId, amount: u32 },
 }
 
 #[derive(TypeInfo, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
@@ -389,6 +397,9 @@ impl Runtime {
 					*current_code = code.clone();
 				});
 				Ok(())
+			},
+			Call::Transfer { from, to, amount } => {
+				todo!()
 			},
 		};
 
