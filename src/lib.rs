@@ -600,7 +600,7 @@ mod tests {
 	use parity_scale_codec::Encode;
 	use sp_core::hexdisplay::HexDisplay;
 	use sp_io::TestExternalities;
-	use sp_runtime::traits::Extrinsic as _;
+	use sp_runtime::traits::Extrinsic;
 
 	/// Return the list of extrinsics that are noted in the `EXTRINSICS_KEY`.
 	fn noted_extrinsics() -> Vec<Vec<u8>> {
@@ -751,6 +751,57 @@ mod tests {
 		let mut import_state = TestExternalities::new_empty();
 		import_block(block, &mut import_state);
 		import_state.execute_with(|| assert_eq!(Runtime::get_state::<u32>(VALUE_KEY), Some(79)));
+	}
+
+	#[test]
+	fn upgrade_code() {
+		// starting code
+		let initial_code: Vec<u8> = vec![0, 1, 2, 3, 4];
+
+		// the new code
+		let new_code: Vec<u8> = vec![5, 6, 7, 8, 9];
+
+		// init the state with the starting code
+		let mut state = TestExternalities::new_empty();
+		state.execute_with(|| {
+			sp_io::storage::set(CODE_KEY, &initial_code.encode());
+		});
+
+		// make sure all is good
+		state.execute_with(|| {
+			let stored_code = Runtime::get_state::<Vec<u8>>(CODE_KEY).unwrap();
+			assert_eq!(stored_code, initial_code,);
+		});
+
+		// make a new extrinsic to upgrade the code
+		let upgrade_code_ext =
+			SignedExtrinsic::new(Call::UpgradeCode { code: new_code.clone() }, None).unwrap();
+
+		// updating
+		state.execute_with(|| {
+			// make a block
+			let header = Header {
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+				parent_hash: Default::default(),
+				number: 0,
+				state_root: Default::default(),
+			};
+			Runtime::do_initialize_block(&header);
+
+			// apply the ext
+			let result = Runtime::do_apply_extrinsic(upgrade_code_ext.clone());
+			assert!(result.is_ok());
+
+			// finalyze
+			let _ = Runtime::do_finalize_block();
+		});
+
+		// verify all is good
+		state.execute_with(|| {
+			let stored_code = Runtime::get_state::<Vec<u8>>(CODE_KEY).unwrap();
+			assert_eq!(stored_code, new_code);
+		});
 	}
 
 	#[test]
