@@ -179,6 +179,7 @@
 use scale_info::TypeInfo;
 // imports the `substrate`'s WASM-compatible standard library. This should give you all standard
 // items like `vec!`. Do NOT bring in `std` from Rust, as this will not work in WASM.
+use sp_std::collections::btree_map::*;
 use sp_std::prelude::*;
 
 // The log target we will use this crate.
@@ -235,7 +236,7 @@ type Balance = u128;
 enum Call {
 	SetValue { value: u32 },
 	UpgradeCode { code: Vec<u8> },
-	Transfer { from: AccountId, to: AccountId, amount: u32 },
+	Transfer { from: AccountId, to: AccountId, amount: Balance },
 }
 
 #[derive(TypeInfo, Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
@@ -394,12 +395,27 @@ impl Runtime {
 			},
 			Call::UpgradeCode { code } => {
 				Self::mutate_state(CODE_KEY, |current_code: &mut Vec<u8>| {
-					*current_code = code.clone();
+					current_code.clone_from(&code);
 				});
 				Ok(())
 			},
 			Call::Transfer { from, to, amount } => {
-				todo!()
+				Self::mutate_state(
+					BALANCES_KEY,
+					|current_balance: &mut BTreeMap<AccountId, Balance>| {
+						let sender_old_balance: Balance =
+							*current_balance.get(&from).unwrap_or(&0u128);
+						let rcpt_old_balance: Balance = *current_balance.get(&to).unwrap_or(&0u128);
+
+						let sender_new_balance: Balance = sender_old_balance.saturating_sub(amount);
+						let rcpt_new_balance: Balance = rcpt_old_balance.saturating_add(amount);
+
+						current_balance.insert(from, sender_new_balance);
+						current_balance.insert(to, rcpt_new_balance);
+					},
+				);
+
+				Ok(())
 			},
 		};
 
